@@ -1,28 +1,28 @@
 package com.max.prospect.domain.repository;
-
-import com.amazonaws.AmazonServiceException;
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
-import com.amazonaws.services.dynamodbv2.document.DynamoDB;
-import com.amazonaws.services.dynamodbv2.document.Table;
-import com.amazonaws.services.dynamodbv2.document.spec.GetItemSpec;
-import com.amazonaws.services.dynamodbv2.model.GetItemRequest;
-import com.amazonaws.services.dynamodbv2.model.ResourceNotFoundException;
+import org.springframework.beans.factory.annotation.Autowired;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
+import software.amazon.awssdk.services.dynamodb.model.DynamoDbException;
+import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
+import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
 
 import java.util.HashMap;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicLong;
-import com.amazonaws.services.dynamodbv2.document.Item;
-import com.amazonaws.services.dynamodbv2.document.PutItemOutcome;
 
 public class ProspectRepository {
-	
-	AmazonDynamoDB client;
-    DynamoDB dynamoDB;
-    Table table;
-    DynamoDBTableProperties dynamoDBTableProperties;
-   
+
+    @Autowired
+	DynamoDBTableProperties dynamoDBTableProperties;
+
+	String tableName;
+	Region region;
+    DynamoDbClient ddb;
+    String partitionKey;
+    String sortKey;
     
     /**
      * Connection pooling is not required in DynamoDB
@@ -39,10 +39,12 @@ public class ProspectRepository {
      */
     
     ProspectRepository(){
-    	client = AmazonDynamoDBClientBuilder.standard().build();
-    	dynamoDB = new DynamoDB(client);
-    	dynamoDBTableProperties = new DynamoDBTableProperties();
-    	table = dynamoDB.getTable(dynamoDBTableProperties.getTable());
+    	tableName = dynamoDBTableProperties.getTable();
+    	partitionKey = dynamoDBTableProperties.getPartitionKey();
+    	sortKey = dynamoDBTableProperties.getSortkey();
+        DynamoDbClient ddb = DynamoDbClient.builder()
+                .region(region)
+                .build();
     }
     
     /**
@@ -51,29 +53,39 @@ public class ProspectRepository {
      */
     public UUID createProspect() {
     	UUID prospectId = UUID.randomUUID();
+        HashMap<String,AttributeValue> itemValues = new HashMap<String,AttributeValue>();
+        itemValues.put(partitionKey, AttributeValue.builder().s(String.valueOf(prospectId)).build());
+        itemValues.put(sortKey, AttributeValue.builder().s("v1").build());
+        itemValues.put("STAGE", AttributeValue.builder().s(String.valueOf(Constants.STAGE_CREATE)).build());
+        PutItemRequest request = PutItemRequest.builder()
+                .tableName(tableName)
+                .item(itemValues)
+                .build();
     	try {
-    		PutItemOutcome outcome = table.putItem(new Item().withPrimaryKey(dynamoDBTableProperties.getPartitionKey(), prospectId, dynamoDBTableProperties.getSortkey(), "v1").
-        			withString("STAGE", Constants.STAGE_CREATE));
-        	System.out.println("PutItem succeeded:\n" + outcome.getPutItemResult());
+            ddb.putItem(request);
         	return prospectId;
     	} catch (ResourceNotFoundException e) {
-    	    System.err.format("Error: The table \"%s\" can't be found.\n", table.getTableName());
+    	    System.err.format("Error: The table \"%s\" can't be found.\n", tableName);
     	    System.err.println("Be sure that it exists and that you've typed its name correctly!");
-    	} catch (AmazonServiceException e) {
+    	} catch (DynamoDbException e) {
     	    System.err.println(e.getMessage());
     	}
     	return null;
     }
-    
+
+    /**
+    Incomplete
+     */
     private String getLastVersion(UUID prospectId) {
     	 HashMap<String,AttributeValue> keyToGet = new HashMap<String,AttributeValue>();
     	 
-         keyToGet.put(dynamoDBTableProperties.getPartitionKey(), AttributeValue.builder().s(prospectId).build());
+         keyToGet.put(dynamoDBTableProperties.getPartitionKey(), AttributeValue.builder().s(String.valueOf(prospectId)).build());
 
          GetItemRequest request = GetItemRequest.builder()
                  .key(keyToGet)
-                 .tableName(table)
+                 .tableName(tableName)
                  .build();
+         return "";
     }
     
     /**
