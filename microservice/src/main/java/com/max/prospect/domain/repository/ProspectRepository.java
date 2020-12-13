@@ -1,5 +1,5 @@
 package com.max.prospect.domain.repository;
-import org.springframework.beans.factory.annotation.Autowired;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.auth.credentials.EnvironmentVariableCredentialsProvider;
@@ -8,19 +8,16 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.DynamoDbException;
-import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
-import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
 
 import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Component
 public class ProspectRepository {
-
-//    @Autowired
-//	DynamoDBTableProperties dynamoDBTableProperties;
 
     @Value("${dynamodb.table}")
 	String tableName;
@@ -96,15 +93,35 @@ public class ProspectRepository {
         v0, v1, v1, v2, v3, v4, and so on
         The get query on table such as prospect summary will handle it.
      */
-    private String getLastVersion(String prospectId) {
-    	 HashMap<String,AttributeValue> keyToGet = new HashMap<String,AttributeValue>();
-//
-//         keyToGet.put(dynamoDBTableProperties.getPartitionKey(), AttributeValue.builder().s(String.valueOf(prospectId)).build());
-//
-//         GetItemRequest request = GetItemRequest.builder()
-//                 .key(keyToGet)
-//                 .tableName(tableName)
-//                 .build();
+    private String getLastVersion(String prospectId) throws Exception{
+    	HashMap<String,AttributeValue> keyToGet = new HashMap<String,AttributeValue>();
+        keyToGet.put(partitionKey, AttributeValue.builder()
+                .s(prospectId).build());
+        GetItemRequest request = GetItemRequest.builder()
+                 .key(keyToGet)
+                 .projectionExpression("sortKey")
+                 .tableName(tableName)
+                 .build();
+
+        try{
+            Map<String,AttributeValue> returnedItem = ddb.getItem(request).item();
+            if (returnedItem != null) {
+                Set<String> keys = returnedItem.keySet();
+                System.out.println("Amazon DynamoDB table attributes: \n");
+
+                for (String key1 : keys) {
+                    System.out.format("%s: %s\n", key1, returnedItem.get(key1).toString());
+                }
+            } else {
+                System.out.format("No item found with the key %s!\n", partitionKey);
+                throw new Exception("Prospect not present");
+            }
+        }catch (DynamoDbException e) {
+            System.err.println(e.getMessage());
+            System.exit(1);
+        }
+
+
          return "";
     }
     
@@ -114,8 +131,36 @@ public class ProspectRepository {
      * The status value is decided by the method
      */
     
-    public void addPersonalDetails(String prospectId, HashMap<String,AttributeValue> itemValues) {
-    	
+    public void addPersonalDetails(String prospectId, HashMap<String,String> values) throws Exception{
+
+        String lastVersion = getLastVersion(prospectId).substring(1);
+        String newVersion = String.valueOf(Integer.parseInt(lastVersion) + 1);
+
+        HashMap<String,AttributeValue> itemValues = new HashMap<String,AttributeValue>();
+        for(String s: values.keySet()){
+            itemValues.put(s, AttributeValue.builder().s(values.get(s)).build());
+        }
+        itemValues.put(partitionKey, AttributeValue.builder().s(prospectId).build());
+        itemValues.put(sortKey, AttributeValue.builder().s(newVersion).build());
+        itemValues.put("STAGE", AttributeValue.builder().s(String.valueOf(Constants.STAGE_ADD_PERSONAL_DETAILS)).build());
+
+        PutItemRequest request = PutItemRequest.builder()
+                .tableName(tableName)
+                .item(itemValues)
+                .build();
+
+        System.out.println("Adding personal details");
+
+        try {
+            ddb.putItem(request);
+            System.out.println("Personal details added");
+        } catch (ResourceNotFoundException e) {
+            System.err.format("Error: The table \"%s\" can't be found.\n", tableName);
+            System.err.println("Be sure that it exists and that you've typed its name correctly!");
+        } catch (DynamoDbException e) {
+            System.err.println(e.getMessage());
+        }
+
     }
     
     /**
