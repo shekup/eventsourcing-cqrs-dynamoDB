@@ -1,5 +1,8 @@
 package com.max.prospect.domain.repository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+import software.amazon.awssdk.auth.credentials.EnvironmentVariableCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
@@ -13,15 +16,21 @@ import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
 import java.util.HashMap;
 import java.util.UUID;
 
+@Component
 public class ProspectRepository {
 
-    @Autowired
-	DynamoDBTableProperties dynamoDBTableProperties;
+//    @Autowired
+//	DynamoDBTableProperties dynamoDBTableProperties;
 
+    @Value("${dynamodb.table}")
 	String tableName;
+
 	Region region;
+
     DynamoDbClient ddb;
+    @Value("${dynamodb.partitionKey}")
     String partitionKey;
+    @Value("${dynamodb.sortkey}")
     String sortKey;
     
     /**
@@ -39,30 +48,33 @@ public class ProspectRepository {
      */
     
     ProspectRepository(){
-    	tableName = dynamoDBTableProperties.getTable();
-    	partitionKey = dynamoDBTableProperties.getPartitionKey();
-    	sortKey = dynamoDBTableProperties.getSortkey();
-        DynamoDbClient ddb = DynamoDbClient.builder()
+        region = Region.AP_SOUTH_1;
+        ddb = DynamoDbClient.builder()
                 .region(region)
+                .credentialsProvider(EnvironmentVariableCredentialsProvider.create())
                 .build();
     }
     
     /**
-     * The expectation is client application will store this prospect Id and for get it will pass the prospect Id. 
+     * The expectation is client application will store this prospect Id and for get it will pass the prospect Id.
+     * AWS SDK can give 'java.net.UnknownHostException: dynamodb.ap-south-1.amazonaws.com' exception sometimes
+     * Some retry mechanism should be added for UnknownHostException
      * @return
      */
-    public UUID createProspect() {
-    	UUID prospectId = UUID.randomUUID();
+    public String createProspect() {
+      	String prospectId = String.valueOf(UUID.randomUUID());
         HashMap<String,AttributeValue> itemValues = new HashMap<String,AttributeValue>();
-        itemValues.put(partitionKey, AttributeValue.builder().s(String.valueOf(prospectId)).build());
+        itemValues.put(partitionKey, AttributeValue.builder().s(prospectId).build());
         itemValues.put(sortKey, AttributeValue.builder().s("v1").build());
         itemValues.put("STAGE", AttributeValue.builder().s(String.valueOf(Constants.STAGE_CREATE)).build());
         PutItemRequest request = PutItemRequest.builder()
                 .tableName(tableName)
                 .item(itemValues)
                 .build();
-    	try {
+    	System.out.println("Creating Prospect");
+        try {
             ddb.putItem(request);
+            System.out.println("Prospect created: " + prospectId);
         	return prospectId;
     	} catch (ResourceNotFoundException e) {
     	    System.err.format("Error: The table \"%s\" can't be found.\n", tableName);
@@ -74,17 +86,25 @@ public class ProspectRepository {
     }
 
     /**
-    Incomplete
+        Possible values of sort key: v0, v1, v2, v3, and so on
+        In rare race conditions values can be: v0, v1, v1, v2, v3, v3, v4, and so on.  That is few duplicates
+        OR v0, v2, v1, v3, v4
+        Duplicate or Inordered versions are not problem in DynamoDB.
+        It is a requirement also to store every event without bothering about sort key value
+        While retrieving if Collections.sort is used the outcome will be sorted values in alphabetical order
+        considering sort key values are strings here
+        v0, v1, v1, v2, v3, v4, and so on
+        The get query on table such as prospect summary will handle it.
      */
-    private String getLastVersion(UUID prospectId) {
+    private String getLastVersion(String prospectId) {
     	 HashMap<String,AttributeValue> keyToGet = new HashMap<String,AttributeValue>();
-    	 
-         keyToGet.put(dynamoDBTableProperties.getPartitionKey(), AttributeValue.builder().s(String.valueOf(prospectId)).build());
-
-         GetItemRequest request = GetItemRequest.builder()
-                 .key(keyToGet)
-                 .tableName(tableName)
-                 .build();
+//
+//         keyToGet.put(dynamoDBTableProperties.getPartitionKey(), AttributeValue.builder().s(String.valueOf(prospectId)).build());
+//
+//         GetItemRequest request = GetItemRequest.builder()
+//                 .key(keyToGet)
+//                 .tableName(tableName)
+//                 .build();
          return "";
     }
     
@@ -94,14 +114,14 @@ public class ProspectRepository {
      * The status value is decided by the method
      */
     
-    public void addPersonalDetails(UUID prospectId, HashMap<String, String> item_values) {
+    public void addPersonalDetails(String prospectId, HashMap<String,AttributeValue> itemValues) {
     	
     }
     
     /**
      * Add optional additional details such as marital status, employment details, etc. 
      */
-    public void addAdditionalDetails(UUID prospectId, HashMap<String, String> item_values) {
+    public void addAdditionalDetails(String prospectId, HashMap<String, String> item_values) {
     	
     }
     

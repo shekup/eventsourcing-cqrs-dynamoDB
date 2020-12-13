@@ -19,9 +19,9 @@ public class Controller {
         return "Hello Users";
     }
 
-    @RequestMapping(value="/prospects/", method= RequestMethod.POST)
-    public void createProspect(){
+    @RequestMapping(value="/prospects/")
+    public String createProspect(){
         CreateProspectCommand createProspectCommand = new CreateProspectCommand();
-        prospectAggregate.createProspectHandler(createProspectCommand);
+        return prospectAggregate.createProspectHandler(createProspectCommand);
     }
 }

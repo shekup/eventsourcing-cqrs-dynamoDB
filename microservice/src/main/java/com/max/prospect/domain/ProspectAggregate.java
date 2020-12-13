@@ -11,8 +11,8 @@ public class ProspectAggregate {
 	@Autowired
 	ProspectRepository prospectRepository;
 	
-	public void createProspectHandler(CreateProspectCommand createProspectCommand) {
-		prospectRepository.createProspect();
+	public String createProspectHandler(CreateProspectCommand createProspectCommand) {
+		return prospectRepository.createProspect();
 	}
 
 }
