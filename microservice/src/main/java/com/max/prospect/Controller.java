@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.util.Date;
 
@@ -19,8 +20,8 @@ public class Controller {
 
     @RequestMapping("/")
     public String index() {
-        System.out.println("Hello Users");
-        return "Hello Users";
+        System.out.println("Hello, World");
+        return "Hello, World";
     }
 
     /**
@@ -28,7 +29,7 @@ public class Controller {
      * @return
      */
     @RequestMapping(value="/prospects/")
-    public String createProspect(){
+    public @ResponseBody String createProspect(){
         CreateProspectCommand createProspectCommand = new CreateProspectCommand();
         return prospectAggregate.createProspectHandler(createProspectCommand);
     }
@@ -37,7 +38,7 @@ public class Controller {
      * This should be POST method but for convenience GET is written
      * @return
      */
-    @RequestMapping(value="/prospects/")
+    @RequestMapping(value="/prospects/addPersonal")
     public HttpStatus addPersonalDetails(String prospectId){
         PropsectPersonalDetailsCommand personalProspectCommand = new PropsectPersonalDetailsCommand();
         personalProspectCommand.setFirstName("Abhishek");
