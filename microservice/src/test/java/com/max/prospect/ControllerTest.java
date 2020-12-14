@@ -28,15 +28,16 @@ public class ControllerTest {
     @MockBean
     private ProspectAggregate prospectAggregate;
 
-    @MockBean
     private CreateProspectCommand createProspectCommand;
 
     @Test
     public void testCreateProspect() throws Exception {
 
-        when(prospectAggregate.createProspectHandler(createProspectCommand)).thenReturn("123456789");
+        createProspectCommand = new CreateProspectCommand();
 
-        this.mockMvc.perform(get("/prospects/")).andDo(print()).andExpect(content().string(containsString("123456789")));
+       // when(prospectAggregate.createProspectHandler(createProspectCommand)).thenReturn("1234567");
+
+        this.mockMvc.perform(get("/prospects/")).andDo(print()).andExpect(status().isOk()).andExpect(content().string(containsString("123456789")));
     }
 
 }

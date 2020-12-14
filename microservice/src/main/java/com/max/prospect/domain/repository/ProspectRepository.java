@@ -3,6 +3,10 @@ package com.max.prospect.domain.repository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.auth.credentials.EnvironmentVariableCredentialsProvider;
+import software.amazon.awssdk.enhanced.dynamodb.DynamoDbTable;
+import software.amazon.awssdk.enhanced.dynamodb.Key;
+import software.amazon.awssdk.enhanced.dynamodb.TableSchema;
+import software.amazon.awssdk.enhanced.dynamodb.mapper.StaticTableSchema;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
@@ -10,11 +14,15 @@ import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.DynamoDbException;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
+// Added for EnhancedQuery
+import software.amazon.awssdk.enhanced.dynamodb.DynamoDbEnhancedClient;
+import software.amazon.awssdk.enhanced.dynamodb.model.QueryConditional;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+
+import java.util.*;
+
+import static software.amazon.awssdk.enhanced.dynamodb.mapper.StaticAttributeTags.primaryPartitionKey;
+import static software.amazon.awssdk.enhanced.dynamodb.mapper.StaticAttributeTags.primarySortKey;
 
 @Component
 public class ProspectRepository {
@@ -29,6 +37,19 @@ public class ProspectRepository {
     String partitionKey;
     @Value("${dynamodb.sortkey}")
     String sortKey;
+
+    // Added for Enhanced Query
+    static final TableSchema<Prospects> PROSPECTS_TABLE_SCHEMA =  StaticTableSchema.builder(Prospects.class)
+            .newItemSupplier(Prospects::new)
+            .addAttribute(String.class, a -> a.name("id")
+                    .getter(Prospects::getProspectId)
+                    .setter(Prospects::setProspectId)
+                    .tags(primaryPartitionKey()))
+            .addAttribute(String.class, a -> a.name("sort")
+                    .getter(Prospects::getVersion)
+                    .setter(Prospects::setVersion)
+                    .tags(primarySortKey()))
+            .build();
     
     /**
      * Connection pooling is not required in DynamoDB
@@ -82,6 +103,39 @@ public class ProspectRepository {
     	return null;
     }
 
+    private Map<String,AttributeValue> getItem(String prospectId, String version) throws Exception {
+
+        HashMap<String,AttributeValue> keyToGet = new HashMap<String,AttributeValue>();
+        // Only passing the partition key will not work as table has a composite primary key
+        keyToGet.put(partitionKey, AttributeValue.builder()
+                .s(prospectId).build());
+        keyToGet.put(sortKey, AttributeValue.builder()
+                .s(version).build());
+        GetItemRequest request = GetItemRequest.builder()
+                .key(keyToGet)
+                .projectionExpression("VERSION")
+                .tableName(tableName)
+                .build();
+        try{
+            Map<String,AttributeValue> returnedItem = ddb.getItem(request).item();
+            if (returnedItem != null) {
+                Set<String> keys = returnedItem.keySet();
+                System.out.println("Amazon DynamoDB table attributes: \n");
+
+                for (String key1 : keys) {
+                    System.out.format("%s: %s\n", key1, returnedItem.get(key1).toString());
+                }
+                return returnedItem;
+            } else {
+                System.out.format("No item found with the key %s!\n", partitionKey);
+                throw new Exception("Prospect not present");
+            }
+        }catch (DynamoDbException e) {
+            System.err.println(e.getMessage());
+            //    System.exit(1);
+        }
+        return null;
+    }
     /**
         Possible values of sort key: v0, v1, v2, v3, and so on
         In rare race conditions values can be: v0, v1, v1, v2, v3, v3, v4, and so on.  That is few duplicates
@@ -92,37 +146,54 @@ public class ProspectRepository {
         considering sort key values are strings here
         v0, v1, v1, v2, v3, v4, and so on
         The get query on table such as prospect summary will handle it.
+
+     get the last version is not straight as DynamoDb requires both partition key and sort key in Get Item.
+     Alternate way is using EnhancedQueryRecords which require creating Bean tagged with @DynamoDbBean
+     Another way is write a lambda function that is triggered when new entry is made and it updates the last version attribute
+
+     The Alternate design of using Status as sort key seems more suitable here since it does not depends on last version.
+     The insert row of personal details will have sort key of 'PERSONAL_DETAILS'.
+     This can result in error if entry with same sort key already exists but it can be treated as Integrity check
+
+     below code tries to use enhanced query but it didn't work.
+     The unresolved exception is
+     software.amazon.awssdk.services.dynamodb.model.DynamoDbException: Query condition missed key schema element: PROSPECT_ID (Service: DynamoDb, Status Code: 400, Request ID: 583NN2GUGSQ1V3KV5LMP2OHAHBVV4KQNSO5AEMVJF66Q9ASUAAJG, Extended Request ID: null)
+
+     */
+    /**
+     * https://docs.aws.amazon.com/code-samples/latest/catalog/javav2-dynamodb-src-main-java-com-example-dynamodb-Query.java.html
+     * @param prospectId
+     * @return
+     * @throws Exception
      */
     private String getLastVersion(String prospectId) throws Exception{
-    	HashMap<String,AttributeValue> keyToGet = new HashMap<String,AttributeValue>();
-        keyToGet.put(partitionKey, AttributeValue.builder()
-                .s(prospectId).build());
-        GetItemRequest request = GetItemRequest.builder()
-                 .key(keyToGet)
-                 .projectionExpression("sortKey")
-                 .tableName(tableName)
-                 .build();
 
         try{
-            Map<String,AttributeValue> returnedItem = ddb.getItem(request).item();
-            if (returnedItem != null) {
-                Set<String> keys = returnedItem.keySet();
-                System.out.println("Amazon DynamoDB table attributes: \n");
+            DynamoDbEnhancedClient enhancedClient = DynamoDbEnhancedClient.builder()
+                    .dynamoDbClient(ddb)
+                    .build();
 
-                for (String key1 : keys) {
-                    System.out.format("%s: %s\n", key1, returnedItem.get(key1).toString());
-                }
-            } else {
-                System.out.format("No item found with the key %s!\n", partitionKey);
-                throw new Exception("Prospect not present");
+            // Below didnt work
+            //DynamoDbTable<Prospects> mappedTable = enhancedClient.table(tableName, TableSchema.fromBean(Prospects.class));
+            // Trying below
+            DynamoDbTable<Prospects> mappedTable = enhancedClient.table(tableName, PROSPECTS_TABLE_SCHEMA);
+            QueryConditional queryConditional = QueryConditional
+                    .keyEqualTo(Key.builder()
+                            .partitionValue(prospectId)
+                            .build());
+            Iterator<Prospects> results = mappedTable.query(queryConditional).items().iterator();
+            String result="";
+
+            while (results.hasNext()) {
+                Prospects rec = results.next();
+                result = rec.getProspectId();
+                System.out.println("The record id is " + result);
             }
-        }catch (DynamoDbException e) {
-            System.err.println(e.getMessage());
-            System.exit(1);
+        }catch(Exception e){
+            e.printStackTrace();
         }
 
-
-         return "";
+        return "";
     }
     
     /**
@@ -130,11 +201,25 @@ public class ProspectRepository {
      * The input should be flexible - The number of items can vary from one to many
      * The status value is decided by the method
      */
-    
+    /**
+     * The method works for any random prospect Id
+     * In real implementation, the prospect Id should be validated
+     * @param prospectId
+     * @param values
+     * @throws Exception
+     */
     public void addPersonalDetails(String prospectId, HashMap<String,String> values) throws Exception{
 
-        String lastVersion = getLastVersion(prospectId).substring(1);
-        String newVersion = String.valueOf(Integer.parseInt(lastVersion) + 1);
+        // Below code should be used but getLastVersion method didn't work
+        // More work required to resolve it
+//        String lastVersion = getLastVersion(prospectId).substring(1);
+//        String newVersion = String.valueOf(Integer.parseInt(lastVersion) + 1);
+
+        // In actual implementation.  A get should fire with prospect Id to do two thigs:
+        // 1. Validate prospect Id exists 2. Get last version
+        // Alternatively if STAGE is used as Sort key then only validate the Prospect Id
+
+        String newVersion = "v1";
 
         HashMap<String,AttributeValue> itemValues = new HashMap<String,AttributeValue>();
         for(String s: values.keySet()){

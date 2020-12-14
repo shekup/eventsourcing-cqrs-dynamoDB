@@ -5,10 +5,7 @@ import com.max.prospect.application.commands.PropsectPersonalDetailsCommand;
 import com.max.prospect.domain.ProspectAggregate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.Date;
 
@@ -31,15 +28,17 @@ public class Controller {
     @RequestMapping(value="/prospects/")
     public @ResponseBody String createProspect(){
         CreateProspectCommand createProspectCommand = new CreateProspectCommand();
-        return prospectAggregate.createProspectHandler(createProspectCommand);
+        String prospectId = prospectAggregate.createProspectHandler(createProspectCommand);
+        return prospectId;
     }
 
     /**
      * This should be POST method but for convenience GET is written
      * @return
      */
-    @RequestMapping(value="/prospects/addPersonal")
-    public HttpStatus addPersonalDetails(String prospectId){
+    @RequestMapping(value="/prospects/{prospectId}/addPersonal")
+    public HttpStatus addPersonalDetails(@PathVariable("prospectId") String prospectId){
+        System.out.println("Adding personal details for prospectId: " + prospectId);
         PropsectPersonalDetailsCommand personalProspectCommand = new PropsectPersonalDetailsCommand();
         personalProspectCommand.setFirstName("Abhishek");
         personalProspectCommand.setMiddleName("");
