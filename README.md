@@ -18,8 +18,12 @@ java -jar Onboarding-1.0-SNAPSHOT.war
 The project uses spotify docker plugin, which has three goals: build, push, and tag.  </br>
 The goal can be added in pom.xml (for example 'build' goal in along with spotify plugin) so that if 'mvn package' is executed it will create the docker image.  </br>
 The goal can be kept separate (as here): Add the spotify plugin but dont define goal, add goal in 'mvn package' command, such as, 'mvn package dockerfile:build' (ref - https://codefresh.io/howtos/using-docker-maven-maven-docker/) </br>
-The docker also requires the repo name in lower case only, Otherwise, an error can occur such as 'Repo name "shekup/Onboarding" must contain only lowercase..'</br>
-The name of repo is picked from pom.xml: <br>
-<artifactId>onboarding</artifactId> and <docker.image.prefix>shekup</docker.image.prefix> </br>
+
+The docker also requires the repo name in lower case only, Otherwise, an error can occur such as 'Repo name "shekup/Onboarding" must contain only lowercase..'.  The name of repo is picked from pom.xml: <artifactId>onboarding</artifactId> and <docker.image.prefix>shekup</docker.image.prefix> </br>
+
+Easiest way to create dockerfile in Windows is using Notepad++.  While saving name the file as 'dockerfile' and extension as 'All'.  <br>
+
+amazon corretto is used in project and confirm the version used.  The version may differ from the SDK version, such as, The SDK version used in project is '11.0.9.12.1'  the docker image for same is 'amazoncorretto:11' </br>
+
 Execute the command to successfully build - mvn package -Dmaven.test.skip=true dockerfile:build
 
