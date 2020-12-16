@@ -13,6 +13,7 @@ Maven commands - http://tutorials.jenkov.com/maven/maven-commands.html
 cd target </br>
 java -jar Onboarding-1.0-SNAPSHOT.war
 </br>
+Test in browser 'http://localhost:8080/'
 
 # docker build and run
 The project uses spotify docker plugin, which has three goals: build, push, and tag.  </br>
@@ -25,5 +26,7 @@ Easiest way to create dockerfile in Windows is using Notepad++.  While saving na
 
 amazon corretto is used in project and confirm the version used.  The version may differ from the SDK version, such as, The SDK version used in project is '11.0.9.12.1'  the docker image for same is 'amazoncorretto:11' </br>
 
-Execute the command to successfully build - mvn package -Dmaven.test.skip=true dockerfile:build
+Execute the command to successfully build 'mvn package -Dmaven.test.skip=true dockerfile:build' </br>
+Execute the command to run 'docker run -p 8081:8080 -t shekup/onboarding' </br>
+Test in browser 'http://localhost:8081/'
 
