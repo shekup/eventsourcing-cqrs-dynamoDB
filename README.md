@@ -27,6 +27,7 @@ Easiest way to create dockerfile in Windows is using Notepad++.  While saving na
 amazon corretto is used in project and confirm the version used.  The version may differ from the SDK version, such as, The SDK version used in project is '11.0.9.12.1'  the docker image for same is 'amazoncorretto:11' </br>
 
 Execute the command to successfully build 'mvn package -Dmaven.test.skip=true dockerfile:build' </br>
+Since dockerfile and pom are at same location, the maven will pick the dockerfile, read it, download the base image, create the application image, and upload it to local server </br>
 Execute the command to run 'docker run -p 8081:8080 -t shekup/onboarding' </br>
 Test in browser 'http://localhost:8081/'
-
+</br>Read more - https://nullbeans.com/spring-boot-and-docker-example-on-windows/
